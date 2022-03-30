@@ -13,35 +13,33 @@ defmodule PIRMotionSensor do
 
   def default_options do
     %{
-      poll_time: 60_000,
-      gpio_pin: 1
+      gpio_pin: 17
     }
   end
 
   @impl true
   def init(opts) do
+    {:ok, gpio} = GPIO.open(opts[:gpio_pin], :input)
+
     {:ok,
      %{
-       poll_time: opts[:poll_time],
        gpio_pin: opts[:gpio_pin],
-       motion_sensed: false,
-       listening: nil
+       gpio_ref: gpio,
+       motion: false
+       # history: [],
      }}
   end
 
-  defp poll(next) do
-    Process.send_after(self(), :poll, next)
-  end
+  @impl true
+  def handle_cast({:circuits_gpio, _pin, _timestamp, 1}, state),
+    do: {:noreply, %{state | motion: true}}
 
   @impl true
-  def handle_info(:poll, state) do
-    poll(state[:poll_time])
-    {:noreply, %{state | motion_sensed: motion_detected(state[:gpio_pin])}}
-  end
+  def handle_cast({:circuits_gpio, _pin, _timestamp, _value}, state),
+    do: {:noreply, %{state | motion: false}}
 
   @impl true
-  def handle_call(:listen, {from, _msg}, state) do
-    poll(state[:poll_time])
-    {:reply, %{state | listening: from, motion_sensed: motion_detected(state[:gpio_pin])}}
+  def handle_call(:motion_detected, _from, state) do
+    {:reply, state[:motion], state}
   end
 end
